@@ -55,6 +55,7 @@ func Worker(mapf func(string, string) []KeyValue,
 }
 
 func doMapTask(task *MapTask, mapf func(string, string) []KeyValue) {
+	// 1. 读取输入文件
 	file, err := os.Open(task.FileName)
 	if err != nil {
 		log.Fatalf("cannot open %v", task.FileName)
@@ -64,22 +65,27 @@ func doMapTask(task *MapTask, mapf func(string, string) []KeyValue) {
 		log.Fatalf("cannot read %v", task.FileName)
 	}
 	file.Close()
+
+	// 2. 调用用户定义的 Map 函数
 	kva := mapf(task.FileName, string(content))
+
+	// 3. 按 Reduce 任务数分片
 	omap := make([][]KeyValue, task.NReduce)
 	for _, kv := range kva {
 		i := ihash(kv.Key) % task.NReduce
 		omap[i] = append(omap[i], kv)
 	}
 
+	// 4. 将分片写入中间文件（原子操作）
 	for i, ikva := range omap {
 		intermediateFileName := fmt.Sprintf("mr-%d-%d.m", task.Id, i)
-		tmpfile, err := os.CreateTemp("./", "mr-*.tmp")
+		tmpfile, err := os.CreateTemp("./", "mr-*.tmp") // 创建临时文件
 		if err != nil {
 			log.Fatal(err)
 		}
 		encoder := json.NewEncoder(tmpfile)
 		for _, kv := range ikva {
-			err := encoder.Encode(&kv)
+			err := encoder.Encode(&kv) // JSON 编码写入
 			if err != nil {
 				log.Fatalf("cannot jsonencode %v", kv)
 			}
@@ -90,11 +96,12 @@ func doMapTask(task *MapTask, mapf func(string, string) []KeyValue) {
 		}
 	}
 
-	callMapTaskFinished(task.Id)
+	callMapTaskFinished(task.Id) // 通知协调者 Map 任务完成
 }
 
 func doReduceTask(task *ReduceTask, reducef func(string, []string) string) {
 	intermediate := []KeyValue{}
+	// 1. 收集所有 Map 任务生成的对应分片文件
 	for i := 0; i < task.NMap; i++ {
 		intermediateFileName := fmt.Sprintf("mr-%d-%d.m", i, task.Id)
 		file, err := os.Open(intermediateFileName)
@@ -111,8 +118,10 @@ func doReduceTask(task *ReduceTask, reducef func(string, []string) string) {
 		}
 	}
 
+	// 2. 按 Key 排序
 	sort.Sort(ByKey(intermediate))
 
+	// 3. 调用用户定义的 Reduce 函数并写入结果
 	tmpfile, err := os.CreateTemp("./", "mr-*.tmp")
 	if err != nil {
 		log.Fatal(err)

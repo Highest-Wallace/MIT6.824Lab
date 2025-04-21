@@ -27,8 +27,9 @@ type ExampleReply struct {
 type FetchTaskArgs struct {
 }
 
+// 协调者返回的任务信息
 type FetchTaskReply struct {
-	Done       bool
+	Done       bool // 全部任务是否完成
 	MapTask    *MapTask
 	ReduceTask *ReduceTask
 }
@@ -45,8 +46,9 @@ type TaskFinishedReply struct {
 // in /var/tmp, for the coordinator.
 // Can't use the current directory since
 // Athena AFS doesn't support UNIX-domain sockets.
+// 生成协调者的 Unix 套接字路径
 func coordinatorSock() string {
 	s := "/var/tmp/5840-mr-"
-	s += strconv.Itoa(os.Getuid())
+	s += strconv.Itoa(os.Getuid()) // 根据用户ID生成唯一路径
 	return s
 }
