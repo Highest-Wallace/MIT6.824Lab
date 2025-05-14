@@ -43,7 +43,7 @@
 - 日志复制与分发：
   - Leader接收客户端请求 (通过 `Start()` 方法)，将命令作为日志条目 (Entry) 追加到自己的日志中 。
   - Leader通过 `AppendEntries` RPC将新的日志条目复制给Followers。`AppendEntries` RPC包含了 `prevLogIndex` 和 `prevLogTerm` 用于保证日志的一致性检查。
-  - Follower收到 `AppendEntries` RPC后，会进行一致性检查，若通过则追加日志条目，并返回成功。
+  - Follower收到 `AppendEntries` RPC后，会进行一致性检查，若通过则追加日志条目，并返回成功；若不成功会返回冲突任期的最早索引。
   - Leader维护了 `nextIndex` 和 `matchIndex` 数组来追踪每个Follower的日志复制进度。
   - 当Leader发现Follower的日志与其不一致时，会递减 `nextIndex` 并重试 `AppendEntries`，直到找到匹配点，然后发送后续的日志条目，实现了快速日志回溯的优化 。
 - 持久化存储：
@@ -109,7 +109,11 @@
 
 ### Raft
 
-1. 候选者发起选举后回收选票，当时我直接检查得票是否过半来判断是否成为leader。问题出现是没有对回收选票的任期进行检查，假设候选者A在任期3发起选举，向其他节点发送请求选票请求；其他节点B在更高任期4发起选举，A收到B的请求后更新自己的currentTerm为4，并降级为跟随者；此时A仍然可能收到任期3的投票回复（例如网络延迟导致回复晚到），如果无任期检查，A会错误地认为自己当选为领导者，出现多个leader错误。
+1. 候选者发起选举后回收选票，当时我直接检查得票是否过半来判断是否成为leader。问题出现是没有对回收选票的任期进行检查，假设候选者A在任期3发起选举，向其他节点发送请求选票请求；其他节点B在更高任期4发起选举，A收到B的请求后更新自己的`currentTerm`为4，并降级为跟随者；此时A仍然可能收到任期3的投票回复（例如网络延迟导致回复晚到），如果无任期检查，A会错误地认为自己当选为领导者，出现多个leader错误。
+2. 快速恢复时leader根据follower返回的信息（冲突任期的最早索引`ConflictIndex`和`ConflictIndex`）决定如何选择`newNextIndex`
+   - Follower“4 5 5”和Leader“4 6 6 6”：Leader 的日志中没有 Follower 报告的冲突任期，`newNextIndex`直接从`ConflictIndex`开始覆盖
+   - Follower"4 4 4"和Leader"4 6 6 6"：Leader 的日志中有 Follower 报告的冲突任期，`newNextIndex`直接从`ConflictIndex + 1`开始覆盖
+   - Follower"4"和Leader"4 6 6 6"：Follower 的日志太短，`newNextIndex`应当从Follower日志的末尾开始尝试
 
 ## 项目所用知识点总结
 
