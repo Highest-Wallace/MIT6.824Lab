@@ -142,7 +142,9 @@ func (rf *Raft) leaderElection() {
 
 		rf.mu.Lock()
 		// here I once encounter a trick bug in TestFigure8Unreliable2C caused by missing check rf.currentTerm
-		// whiout this check it may be elected success with and old term, but now run as a leader with new term
+		// whiout this check it may be elected success with an old term, but now run as a leader with new term
+		// 情景：假设候选者A在任期3发起选举，向其他节点发送RequestVote请求；其他节点B在更高任期4发起选举，A收到B的请求后更新自己的currentTerm为4，并降级为跟随者；
+		// 此时A仍然可能收到任期3的投票回复（例如网络延迟导致回复晚到），如果无任期检查，A会错误地认为自己当选为领导者，出现多个leader错误。
 		if rf.currentTerm == args.Term && rf.role == CANDIDATE && votesCount >= majority {
 			Debug(VoteEvent, rf.me, "elected as a leader with term %d\n", rf.currentTerm)
 			rf.becomeLeader()

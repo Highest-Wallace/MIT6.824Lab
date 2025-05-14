@@ -75,12 +75,14 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// “PrevLogIndex log matched” check
 	if args.PrevLogIndex > rf.log.lastIndex() {
+		// 跟随者日志过短，返回冲突信息
 		Debug(HeartbeatEvent, rf.me, "refuse AppendEntries request from S%d for args.PrevLogIndex %d > rf.lastLogIndex %d \n",
 			args.LeaderId, args.PrevLogIndex, rf.log.lastIndex())
 		reply.ConflictTerm = rf.log.lastEntry().Term
 		reply.ConflictIndex = rf.log.lastIndex()
 		reply.Success = false
 	} else if args.PrevLogIndex < rf.snapshotIndex {
+		// 快照覆盖了 PrevLogIndex，截断日志并追加新条目
 		i := rf.snapshotIndex - args.PrevLogIndex - 1
 		// log.Printf("---args.PrevLogIndex %d < rf.snapshotIndex %d, i=%d, len(args.Entries)=%d\n", args.PrevLogIndex, rf.snapshotIndex, i, len(args.Entries))
 		if len(args.Entries) > i {
@@ -108,6 +110,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = true
 
 	} else if rf.log.entry(args.PrevLogIndex).Term != args.PrevLogTerm {
+		// 日志条目冲突，回退到冲突任期的最早索引
 		reply.ConflictTerm = rf.log.entry(args.PrevLogIndex).Term
 		reply.ConflictIndex = args.PrevLogIndex
 		Debug(HeartbeatEvent, rf.me, "refuse AppendEntries request from S%d for rf.log[PrevLogIndex %d].Term %d != args.PrevLogTerm %d\n",
