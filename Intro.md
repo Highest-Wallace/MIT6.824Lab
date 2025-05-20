@@ -17,7 +17,7 @@
 
 您在项目中采取了以下关键行动，并应用了相应的技术知识：
 
-**1. MapReduce 并行计算框架 (`src/mr/coordinator.go`, `src/mr/worker.go`)**
+#### 1. MapReduce 并行计算框架 (`src/mr/coordinator.go`, `src/mr/worker.go`)
 
 - 任务调度与管理：
   - 在 `mr/coordinator.go` 中，您设计并实现了`Coordinator`结构体来管理Map任务和Reduce任务的生命周期。任务状态（如 `WAITTING`, `STARTED`, `FINISHED`）被明确定义和追踪。
@@ -33,7 +33,7 @@
 
 **所用知识点**：Go语言并发编程（goroutines, channels, mutex, condition variables）、RPC、分布式任务调度、故障检测与恢复机制、文件原子操作。
 
-**2. Raft 一致性协议 (`src/raft/raft.go`)**
+#### 2. Raft 一致性协议 (`src/raft/raft.go`)
 
 - 领导者选举：
   - 实现了Raft论文图2中描述的服务器状态 (Follower, Candidate, Leader) 转换逻辑。
@@ -60,14 +60,14 @@
 
 **所用知识点**：Go语言并发与RPC、分布式共识算法 (Raft)、状态机复制、持久化存储、日志压缩与快照、网络分区与节点故障处理。
 
-**3. 容错的键值存储服务 (kvraft) (`src/kvraft/server.go`)**
+3. #### 容错的键值存储服务 (kvraft) (`src/kvraft/server.go`)
 
 - 基于Raft的线性一致性：
   - 每个kvserver实例内部包含一个Raft peer 。客户端的Put/Append/Get操作请求首先被提交给Raft集群的Leader。
   - `KVServer`的 `PutAppend` 和 `Get` RPC处理器会将操作 (Op) 封装后调用其Raft实例的 `Start()` 方法，将操作提议到Raft日志中 。
   - 所有kvserver实例从Raft的 `applyCh` 中接收已提交的日志条目 (Op)，并按顺序应用到本地的键值存储 (一个内存 `map[string]string`) 。由于所有副本以相同顺序应用相同操作，从而保证了数据的一致性。
 - 客户端请求处理与重试：
-  - `Clerk` (客户端) 负责与kvserver集群交互。它会追踪当前的Leader，并优先向Leader发送请求 。如果请求失败 (例如，Leader改变或网络问题)，`Clerk`会重试其他服务器，直到找到新的Leader 。
+  - `Clerk` (客户端) 负责与kvserver集群交互。它会追踪当前的Leader，并优先向Leader发送请求 。如果请求失败 (例如，Leader改变或网络问题)，`Clerk`会遍历重试其他服务器，直到找到新的Leader 。
 - 重复请求处理 (At-Most-Once Semantics)：
   - 为防止因客户端重试导致同一操作被执行多次，引入了客户端ID (`ClientId`) 和序列号 (`SeqNum`) 机制 。
   - `KVServer` 会为每个客户端记录其已处理的最新 `SeqNum` (存储在 `clientsStatus` 结构中)。
@@ -78,7 +78,7 @@
 
 **所用知识点**：Go语言、Raft协议应用、线性一致性、RPC、客户端请求路由与重试、幂等性保证 (at-most-once semantics)、分布式系统快照机制。
 
-**4. 分片的键值存储服务 (shardkv) (`src/shardkv/server.go`, `src/shardctrler/server.go`)**
+#### 4. 分片的键值存储服务 (shardkv) (`src/shardkv/server.go`, `src/shardctrler/server.go`)
 
 - Shard Controller (`shardctrler/server.go`)：
   - 实现了一个中心化的、容错的`ShardCtrler`服务，其本身也由Raft保证一致性 。
